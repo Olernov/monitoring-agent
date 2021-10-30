@@ -1,0 +1,142 @@
+syntax = "proto3";
+
+/*----------------------------------------------*/
+// Types of requests that Nectus Server sends to the remote agent
+enum RequestType {
+        SET_METRICS_TO_COLLECT = 0; // Request defining metrics that should be collected 
+                                    // by the agent in Active processing mode. Not used in 
+                                    // Passive mode.
+                                    // NB: Active mode is not implemented currently.
+        
+        GET_METRIC_VALUES = 1;      // Request to obtain current values for the list of 
+                                    // metrics given in this request.
+        
+        GET_HOST_DESCRIPTION = 2;   // Request to obtain parameters of the monitored host.
+                                    // See HostDescription message for the list of parameters.
+    }
+
+/*----------------------------------------------*/
+// Message from Nectus Server to the remote agent
+message LocalServerMessage {
+    
+    message MetricRequest {               
+        string metricCode = 1;      // Unique symbolic code identifying the requested metric.
+
+        repeated string nameRegExps = 2;      // Regular expressions to match process names.
+                                    // Actual for processes metrics only.
+                                    // For example, in Nectus Server there is a configured metric
+                                    // to check running processes postg* and nectus*.
+                                    // It will result in regular expressions 
+                                    // "postg[^,]*" and "nectus[^,]*".                                    
+    }
+
+    RequestType requestType = 1;    // Type of request.
+
+    int32 requestId = 2;            // Sequential number (ID) of request.
+
+    repeated MetricRequest metricRequests = 3; // List of metrics to be obtained by the agent 
+                                    // for the given local server message.
+
+    int32 protocolVersion = 4;      // Version of protocol used to exchange messages 
+                                    // between Nectus Server and the agent.
+}
+
+/*----------------------------------------------*/
+// Message from the remote agent to Nectus Server
+message RemoteAgentMessage {
+    
+    enum ResultCode {
+        SUCCESS = 0;
+        FAILURE = 1;
+    }
+
+    RequestType requestType = 1;    // Type of server request that this message responds to.
+
+    int32 requestId = 2;            // ID of request that this message responds to.
+
+    ResultCode resultCode = 3;      // Overall result of server request processing by the agent.
+
+    string errorDesription = 4;     // Details of error in case of resultCode = FAILURE.
+
+    message MetricValue {
+        string deviceName = 1;      // Device name (disk or network interface) that 
+                                    // current metric value relates to. 
+                                    // Empty for server-wide metrics such as CPU or memory usage.
+
+        double value = 2;           // Current value of metric
+
+        double maximumValue = 3;    // Optional maximum value of metric 
+                                    // (Total RAM size, disk total size etc)
+
+        repeated string runningProcessesRegExps = 4;   // List of processes currently running.
+                                    // Each string represents a regular expression previously
+                                    // given in LocalServerMessage.Metric.nameRegExps. 
+                                    // For the example given in LocalServerMessage, let's consider 
+                                    // nectus-agent process is running and no postg* processes are.
+                                    // Then runningProcessesRegExps will contain "nectus[^,]*"
+                                    // and notRunningProcessesRegExps will contain "postg[^,]*"
+
+        repeated string notRunningProcessesRegExps = 5;   // List of processes not running 
+                                    // currently.
+    }
+
+    // Message to respond to a particular metric requested
+    message MetricResponse {
+        string metricCode = 1;      // Unique metric code matching the one requested in 
+                                    // the LocalServerMessage.Metric.
+
+        ResultCode resultCode = 2;  // Result of obtaining the metric value (SUCCESS or FAILURE).
+
+        string errorDescription = 3;  // Details of error in case of resultCode = FAILURE.
+        
+        repeated MetricValue values = 4; // List of values related to the current metric.
+                                    // For example, disk read rate for every disk existing
+                                    // in the system.
+    }
+
+    // Description of a disk attached to the monitored server.
+    message DiskInfo {
+        string diskName = 1;        // Composite disk name generated from fileSystem and mountPoint.
+                                    // E.g. "/dev/sda1 mounted on /newvolume"
+
+        string fileSystem = 2;      // E.g. /dev/sda1
+
+        string mountPoint = 3;      // E.g. /newvolume
+    }
+
+    // Description of a network interface attached to the monitored server.
+    message NetworkInterfaceInfo {
+        string interfaceName = 1;   // Name of the logical network interface
+
+        uint32 ipv4Address = 2;     // IPv4 address represented in numeric format
+
+        uint32 ipv4NetMask = 3;     // IPv4 mask represented in numeric format
+
+        bytes ipv6Address = 4;      // IPv6 address in binary form
+
+        bytes ipv6NetMask = 5;      // IPv6 mask in binary form
+
+        bytes macAddress = 7;       // MAC address of the interface in binary form
+
+        uint32 speedMbits = 8;      // Interface speed (Mbits per second)
+    }
+
+    // Message containing information of the host monitored
+    message HostDescription {
+        string hostname = 1;        // Name of the host
+
+        string operatingSystem = 2; // Name of operation system
+
+        uint32 numOfProcessors = 3; // Number of CPUs installed
+
+        uint32 numOfLogicalProcessors = 4; // Number of cores installed
+
+        repeated DiskInfo disks = 5; // List of disks attached to the host
+
+        repeated NetworkInterfaceInfo netInterfaces = 6; // List of network adapters attached.
+    }
+
+    HostDescription description = 5; // Each agent response may contain a HostDescription message
+
+    repeated MetricResponse metricResponses = 6; // and/or one or more MetricResponses.
+}
