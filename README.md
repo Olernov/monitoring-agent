@@ -1,10 +1,3 @@
-[[_TOC_]]
-
-# Automated builds guide
-Read me on automated compile & packaging guide in [packaging readme](packaging/README.md).
-
-ℹ Especially, you may be interested in automated environment prepare script `checkenv.sh`, which mostly superceeds manual actions described below.
-
 # PREREQUISITES
 
 ## RedHat 6, 7, 8:
